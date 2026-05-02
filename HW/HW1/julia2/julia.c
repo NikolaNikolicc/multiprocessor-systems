@@ -2,16 +2,22 @@
 # include <stdlib.h>
 # include <string.h>
 # include <time.h>
-# include <omp.h>
+#include <omp.h> 
 
 # define DEFAULT_H 1000
 # define DEFAULT_W 1000
 # define DEFAULT_CNT 200
 # define DEFAULT_FILENAME "julia"
+# define DEFAULT_CI 0.156
+# define DEFAULT_CR -0.8
+# define DEFAULT_XL -1.5
+# define DEFAULT_XR +1.5
+# define DEFAULT_YB -1.5
+# define DEFAULT_YT +1.5
 
 int main (int argc, char *argv[]);
-unsigned char *julia_set ( int w, int h, int cnt, float xl, float xr, float yb, float yt );
-int julia ( int w, int h, float xl, float xr, float yb, float yt, int i, int j, int cnt );
+unsigned char *julia_set ( int w, int h, int cnt );
+int julia ( float ar, float ai, int cnt );
 void tga_write ( int w, int h, unsigned char rgb[], char *filename );
 void timestamp ( );
 
@@ -24,10 +30,6 @@ int main (int argc, char *argv[] )  {
   unsigned char *rgb;
   double t1;
   double t2;
-  float xl = - 1.5;
-  float xr = + 1.5;
-  float yb = - 1.5;
-  float yt = + 1.5;
 
   if (argc == 4) {
   h = atoi(argv[1]);
@@ -52,7 +54,7 @@ int main (int argc, char *argv[] )  {
   printf ( "JULIA Set\n" );
   printf ( "  Plot a version of the Julia set for Z(k+1)=Z(k)^2-0.8+0.156i\n" );
 
-  rgb = julia_set ( w, h, cnt, xl, xr, yb, yt );
+  rgb = julia_set ( w, h, cnt );
 
   tga_write ( w, h, rgb, filename );
 
@@ -68,64 +70,78 @@ int main (int argc, char *argv[] )  {
   return 0;
 }
 
-unsigned char *julia_set ( int w, int h, int cnt, float xl, float xr, float yb, float yt )
+unsigned char *julia_set ( int w, int h, int cnt )
 {
   int i;
   int j;
   int juliaValue;
   int k;
   unsigned char *rgb;
+  float x, y, factorX, factorY;
+  int start, end, chunk, myid, nthreads;
   double time1, time2, elapsed;
 
   rgb = ( unsigned char * ) malloc ( w * h * 3 * sizeof ( unsigned char ) );
 
+  
+  factorX = (float) (DEFAULT_XL - DEFAULT_XR) / (float) (w - 1);
+  factorY = (float) (DEFAULT_YB - DEFAULT_YT) / (float) (h - 1);
+
   time1 = omp_get_wtime();
-  for ( j = 0; j < h; j++ )
+#pragma omp parallel default (none) \
+                      shared (rgb, w, h, cnt, factorX, factorY) \
+                      private (i, j, k, x, y, juliaValue, start, end, chunk, myid, nthreads)
+{
+  myid = omp_get_thread_num();
+  nthreads = omp_get_num_threads();
+  chunk = (h + nthreads - 1) / nthreads; // ceil
+
+  start = myid * chunk;
+  end = start + chunk < h ? start + chunk : h;
+
+  for (i = w * start * 3; i < w * end * 3; i++) 
   {
+    rgb[i] = 255;
+  }
+  
+  k = 3 * w * start;
+  y = (float) DEFAULT_YB - start * factorY;
+  for ( j = start; j < end; j++ )
+  { 
+    x = (float) DEFAULT_XL;
     for ( i = 0; i < w; i++ )
     {
-    juliaValue = julia ( w, h, xl, xr, yb, yt, i, j, cnt );
-
-    k = 3 * ( j * w + i );
-
-    rgb[k]   = 255 * ( 1 - juliaValue );
-    rgb[k+1] = 255 * ( 1 - juliaValue );
-    rgb[k+2] = 255;
+      juliaValue = julia ( x, y, cnt );
+      if (juliaValue)
+      {
+        rgb[k]   = 0;
+        rgb[k+1] = 0;
+      }
+      // k = (j * w + i) * 3;
+      k += 3;
+      // x = DEFAULT_XL - i * factorX;
+      x -= factorX;
     }
+    // y = DEFAULT_YB - j * factorY;
+    y -= factorY;
+
   }
+}
   time2 = omp_get_wtime();
   elapsed = time2 - time1;
-  printf("Elapsed time for julia_set: %f\n", elapsed);
-
+  printf("Elapsed time: %f\n", elapsed);
   return rgb;
 }
 
-int julia ( int w, int h, float xl, float xr, float yb, float yt, int i, int j, int cnt )
+int julia ( float ar, float ai, int cnt )
 {
-  float ai;
-  float ar;
-  float ci = 0.156;
-  float cr = -0.8;
   int k;
   float t;
-  float x;
-  float y;
-
-  x = ( ( float ) ( w - i - 1 ) * xl
-      + ( float ) (     i     ) * xr ) 
-      / ( float ) ( w     - 1 );
-
-  y = ( ( float ) ( h - j - 1 ) * yb
-      + ( float ) (     j     ) * yt ) 
-      / ( float ) ( h     - 1 );
-
-	  ar = x;
-  ai = y;
 
   for ( k = 0; k < cnt; k++ )
   {
-    t  = ar * ar - ai * ai + cr;
-    ai = ar * ai + ai * ar + ci;
+    t  = ar * ar - ai * ai + DEFAULT_CR;
+    ai = ar * ai + ai * ar + DEFAULT_CI;
     ar = t;
 
     if ( 1000 < ar * ar + ai * ai )

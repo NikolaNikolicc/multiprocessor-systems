@@ -105,6 +105,7 @@ unsigned char *julia_set ( int w, int h, int cnt )
         rgb[k]   = 0;
         rgb[k+1] = 0;
       }
+      // k = (j * w + i) * 3;
       k += 3;
       // x = DEFAULT_XL - i * factorX;
       x -= factorX;
