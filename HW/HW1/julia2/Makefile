@@ -1,6 +1,6 @@
 # C compiler
 CC = gcc
-CC_FLAGS = -fopenmp -O2
+CC_FLAGS = -fopenmp -O3
 
 julia: 
 	$(CC) $(CC_FLAGS) julia.c -o julia -lm 

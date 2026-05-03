@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <omp.h>
 
 int i4_ceiling(double x)
 {
@@ -103,6 +104,8 @@ int main(int arc, char **argv)
   double wt;
   double z;
 
+  double time1, time2, elapsed_time;
+
   int N = atoi(argv[1]);
   timestamp();
 
@@ -135,6 +138,8 @@ int main(int arc, char **argv)
 
   err = 0.0;
   n_inside = 0;
+
+  time1 = omp_get_wtime();
 
   for (i = 1; i <= ni; i++)
   {
@@ -238,6 +243,11 @@ int main(int arc, char **argv)
       }
     }
   }
+
+  time2 = omp_get_wtime();
+  elapsed_time = time2 - time1;
+  printf("\nElapsed time = %f seconds\n", elapsed_time);
+  
   err = sqrt(err / (double)(n_inside));
 
   printf("\n\nRMS absolute error in solution = %e\n", err);

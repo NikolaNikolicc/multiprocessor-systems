@@ -72,14 +72,13 @@ int main (int argc, char *argv[] )  {
 
 unsigned char *julia_set ( int w, int h, int cnt )
 {
-  int i;
-  int j;
-  int juliaValue;
-  int k;
+  int i, j, k;
   unsigned char *rgb;
-  float x, y, factorX, factorY;
-  int start, end, chunk, myid, nthreads;
+  float factorX, factorY;
   double time1, time2, elapsed;
+  int global = 0;
+  float x, y, ai, ar, t;
+  int juliaValue, k_iter, start, end;
 
   rgb = ( unsigned char * ) malloc ( w * h * 3 * sizeof ( unsigned char ) );
 
@@ -89,21 +88,16 @@ unsigned char *julia_set ( int w, int h, int cnt )
 
   time1 = omp_get_wtime();
 #pragma omp parallel default (none) \
-                      shared (rgb, w, h, cnt) \
-                      private (i, j, k, x, y, juliaValue, start, end, chunk, myid, nthreads) \
+                      shared (rgb, w, h, cnt, global) \
+                      private (i, j, k, x, y, ai, ar, t, juliaValue, k_iter, start, end) \
                       firstprivate (factorX, factorY)
 {
-  myid = omp_get_thread_num();
-  nthreads = omp_get_num_threads();
-  chunk = (h + nthreads - 1) / nthreads; // ceil
+  int myid = omp_get_thread_num();
+  int nthreads = omp_get_num_threads();
+  int chunk = (h + nthreads - 1) / nthreads; // ceil
 
-  start = myid * chunk;
+  start = global++ * chunk;
   end = start + chunk < h ? start + chunk : h;
-
-  for (i = w * start * 3; i < w * end * 3; i++) 
-  {
-    rgb[i] = 255;
-  }
   
   k = 3 * w * start;
   y = (float) DEFAULT_YB - start * factorY;
@@ -112,13 +106,26 @@ unsigned char *julia_set ( int w, int h, int cnt )
     x = (float) DEFAULT_XL;
     for ( i = 0; i < w; i++ )
     {
-      juliaValue = julia ( x, y, cnt );
-      if (juliaValue)
+      juliaValue = 1;
+      ar = x;
+      ai = y;
+      for ( k_iter = 0; k_iter < cnt; k_iter++ )
       {
-        rgb[k]   = 0;
-        rgb[k+1] = 0;
+        t  = ar * ar - ai * ai + DEFAULT_CR;
+        ai = ar * ai * 2 + DEFAULT_CI;
+        ar = t;
+
+        if ( 1000 < ar * ar + ai * ai )
+        {
+          juliaValue = 0;
+          break;
+        }
       }
-      // k = (j * w + i) * 3;
+
+      rgb[k]   = 255 * (1 - juliaValue);
+      rgb[k+1] = 255 * (1 - juliaValue);
+      rgb[k+2] = 255;
+      // k = 3 * (j * w + i);
       k += 3;
       // x = DEFAULT_XL - i * factorX;
       x -= factorX;

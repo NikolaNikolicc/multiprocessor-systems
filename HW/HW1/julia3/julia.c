@@ -91,7 +91,7 @@ unsigned char *julia_set ( int w, int h, int cnt )
                       default (none) \
                       shared (rgb, w, h, cnt, factorX, factorY) \
                       private (i, j, k, x, y, juliaValue) \
-                      schedule (static)
+                      schedule (dynamic)
   for ( j = 0; j < h; j++ )
   { 
     k = 3 * w * j;
