@@ -5,14 +5,14 @@
 
 int main ( int argc, char *argv[] );
 void compute ( int np, int nd, double pos[], double vel[], 
-  double mass, double f[], double *pot, double *kin );
+  double f[], double *pot, double *kin );
 double cpu_time ( );
 double dist ( int nd, double r1[], double r2[], double dr[] );
 void initialize ( int np, int nd, double pos[], double vel[], double acc[] );
-void r8mat_uniform_ab ( int m, int n, double a, double b, int *seed, double r[] );
+void r8mat_uniform_ab ( int m, int n, int *seed, double r[] );
 void timestamp ( );
 void update ( int np, int nd, double pos[], double vel[], double f[], 
-  double acc[], double mass, double dt );
+  double acc[], double dt );
 
 int main ( int argc, char *argv[] )
 {
@@ -21,10 +21,8 @@ int main ( int argc, char *argv[] )
   double dt;
   double e0;
   double *force;
-  int i;
   int id;
   double kinetic;
-  double mass = 1.0;
   int nd;
   int np;
   double *pos;
@@ -32,8 +30,6 @@ int main ( int argc, char *argv[] )
   int step;
   int step_num;
   int step_print;
-  int step_print_index;
-  int step_print_num;
   double *vel;
 
   timestamp ( );
@@ -124,8 +120,6 @@ int main ( int argc, char *argv[] )
   printf ( "\n" );
 
   step_print = 0;
-  step_print_index = 0;
-  step_print_num = 10;
   
   ctime = cpu_time ( );
 
@@ -137,10 +131,10 @@ int main ( int argc, char *argv[] )
     }
     else
     {
-      update ( np, nd, pos, vel, force, acc, mass, dt );
+      update ( np, nd, pos, vel, force, acc, dt );
     }
 
-    compute ( np, nd, pos, vel, mass, force, &potential, &kinetic );
+    compute ( np, nd, pos, vel, force, &potential, &kinetic );
 
     if ( step == 0 )
     {
@@ -151,8 +145,7 @@ int main ( int argc, char *argv[] )
     {
       printf ( "  %8d  %14f  %14f  %14e\n", step, potential, kinetic,
        ( potential + kinetic - e0 ) / e0 );
-      step_print_index = step_print_index + 1;
-      step_print = ( step_print_index * step_num ) / step_print_num;
+      step_print += step_num / 10;
     }
 
   }
@@ -181,12 +174,11 @@ int main ( int argc, char *argv[] )
   return 0;
 }
 
-void compute ( int np, int nd, double pos[], double vel[], double mass, 
+void compute ( int np, int nd, double pos[], double vel[], 
   double f[], double *pot, double *kin )
 {
   double d;
   double d2;
-  int i;
   int j;
   int k;
   double ke;
@@ -202,10 +194,9 @@ void compute ( int np, int nd, double pos[], double vel[], double mass,
 /*
   Compute the potential energy and forces.
 */
-    for ( i = 0; i < nd; i++ )
-    {
-      f[i+k*nd] = 0.0;
-    }
+    f[k*nd] = 0.0;
+    f[1+k*nd] = 0.0;
+    if (nd == 3) f[2+k*nd] = 0.0;
 
     for ( j = 0; j < np; j++ )
     {
@@ -226,22 +217,20 @@ void compute ( int np, int nd, double pos[], double vel[], double mass,
 
         pe = pe + 0.5 * pow ( sin ( d2 ), 2 );
 
-        for ( i = 0; i < nd; i++ )
-        {
-          f[i+k*nd] = f[i+k*nd] - rij[i] * sin ( 2.0 * d2 ) / d;
-        }
+        f[k*nd] = f[k*nd] - rij[0] * sin ( 2.0 * d2 ) / d;
+        f[1+k*nd] = f[1+k*nd] - rij[1] * sin ( 2.0 * d2 ) / d;
+        if (nd == 3) f[2+k*nd] = f[2+k*nd] - rij[2] * sin ( 2.0 * d2 ) / d;
       }
     }
 /*
   Compute the kinetic energy.
 */
-    for ( i = 0; i < nd; i++ )
-    {
-      ke = ke + vel[i+k*nd] * vel[i+k*nd];
-    }
+    ke = ke + vel[k*nd] * vel[k*nd];
+    ke = ke + vel[1+k*nd] * vel[1+k*nd];
+    if (nd == 3) ke = ke + vel[2+k*nd] * vel[2+k*nd];
   }
 
-  ke = ke * 0.5 * mass;
+  ke = ke * 0.5;
   
   *pot = pe;
   *kin = ke;
@@ -262,13 +251,22 @@ double cpu_time ( )
 double dist ( int nd, double r1[], double r2[], double dr[] )
 {
   double d;
-  int i;
-
+  double tmp;
+  // 0
   d = 0.0;
-  for ( i = 0; i < nd; i++ )
+  tmp = r1[0] - r2[0];
+  dr[0] = tmp;
+  d += tmp * tmp;
+  // 1
+  tmp = r1[1] - r2[1];
+  dr[1] = tmp;
+  d += tmp * tmp;
+  if (nd == 3)
   {
-    dr[i] = r1[i] - r2[i];
-    d = d + dr[i] * dr[i];
+    // 2
+    tmp = r1[2] - r2[2];
+    dr[2] = tmp;
+    d += tmp * tmp;
   }
   d = sqrt ( d );
 
@@ -278,42 +276,38 @@ double dist ( int nd, double r1[], double r2[], double dr[] )
 
 void initialize ( int np, int nd, double pos[], double vel[], double acc[] )
 {
-  int i;
   int j;
   int seed;
 /*
   Set positions.
 */
   seed = 123456789;
-  r8mat_uniform_ab ( nd, np, 0.0, 10.0, &seed, pos );
+  r8mat_uniform_ab ( nd, np, &seed, pos );
 /*
   Set velocities.
 */
   for ( j = 0; j < np; j++ )
   {
-    for ( i = 0; i < nd; i++ )
-    {
-      vel[i+j*nd] = 0.0;
-    }
+    vel[j*nd] = 0.0;
+    vel[1+j*nd] = 0.0;
+    if (nd == 3) vel[2+j*nd] = 0.0;
   }
 /*
   Set accelerations.
 */
   for ( j = 0; j < np; j++ )
   {
-    for ( i = 0; i < nd; i++ )
-    {
-      acc[i+j*nd] = 0.0;
-    }
+    acc[j*nd] = 0.0;
+    acc[1+j*nd] = 0.0;
+    if (nd == 3) acc[2+j*nd] = 0.0;
   }
 
   return;
 }
 
-void r8mat_uniform_ab ( int m, int n, double a, double b, int *seed, double r[] )
+void r8mat_uniform_ab ( int m, int n, int *seed, double r[] )
 {
   int i;
-  const int i4_huge = 2147483647;
   int j;
   int k;
 
@@ -335,9 +329,9 @@ void r8mat_uniform_ab ( int m, int n, double a, double b, int *seed, double r[] 
 
       if ( *seed < 0 )
       {
-        *seed = *seed + i4_huge;
+        *seed = *seed + 2147483647;
       }
-      r[i+j*m] = a + ( b - a ) * ( double ) ( *seed ) * 4.656612875E-10;
+      r[i+j*m] = 46.56612875E-10 * ( double ) ( *seed );
     }
   }
 
@@ -365,21 +359,29 @@ void timestamp ( )
 }
 
 void update ( int np, int nd, double pos[], double vel[], double f[], 
-  double acc[], double mass, double dt )
+  double acc[], double dt )
 {
-  int i;
   int j;
-  double rmass;
-
-  rmass = 1.0 / mass;
+  int position;
 
   for ( j = 0; j < np; j++ )
   {
-    for ( i = 0; i < nd; i++ )
+    position = j * nd;
+    pos[position] = pos[position] + vel[position] * dt + 0.5 * acc[position] * dt * dt;
+    vel[position] = vel[position] + 0.5 * dt * ( f[position] + acc[position] );
+    acc[position] = f[position];
+
+    position = 1 + j * nd;
+    pos[position] = pos[position] + vel[position] * dt + 0.5 * acc[position] * dt * dt;
+    vel[position] = vel[position] + 0.5 * dt * ( f[position] + acc[position] );
+    acc[position] = f[position];
+
+    if (nd == 3)
     {
-      pos[i+j*nd] = pos[i+j*nd] + vel[i+j*nd] * dt + 0.5 * acc[i+j*nd] * dt * dt;
-      vel[i+j*nd] = vel[i+j*nd] + 0.5 * dt * ( f[i+j*nd] * rmass + acc[i+j*nd] );
-      acc[i+j*nd] = f[i+j*nd] * rmass;
+      position = 2 + j * nd;
+      pos[position] = pos[position] + vel[position] * dt + 0.5 * acc[position] * dt * dt;
+      vel[position] = vel[position] + 0.5 * dt * ( f[position] + acc[position] );
+      acc[position] = f[position];
     }
   }
 

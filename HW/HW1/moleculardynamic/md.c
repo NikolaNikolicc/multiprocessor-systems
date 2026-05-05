@@ -370,6 +370,7 @@ void update ( int np, int nd, double pos[], double vel[], double f[],
   int i;
   int j;
   double rmass;
+  int position;
 
   rmass = 1.0 / mass;
 
