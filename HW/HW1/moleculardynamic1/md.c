@@ -123,23 +123,17 @@ int main ( int argc, char *argv[] )
   
   ctime = cpu_time ( );
 
-  for ( step = 0; step <= step_num; step++ )
+  initialize ( np, nd, pos, vel, acc );
+  compute ( np, nd, pos, vel, force, &potential, &kinetic );
+  e0 = potential + kinetic;
+  printf ( "  %8d  %14f  %14f  %14e\n", step, potential, kinetic,
+      ( potential + kinetic - e0 ) / e0 );
+    step_print += step_num / 10;
+  for ( step = 1; step <= step_num; step++ )
   {
-    if ( step == 0 )
-    {
-      initialize ( np, nd, pos, vel, acc );
-    }
-    else
-    {
-      update ( np, nd, pos, vel, force, acc, dt );
-    }
+    update ( np, nd, pos, vel, force, acc, dt );
 
     compute ( np, nd, pos, vel, force, &potential, &kinetic );
-
-    if ( step == 0 )
-    {
-      e0 = potential + kinetic;
-    }
 
     if ( step == step_print )
     {
